@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "347556182902",
+    "project_id": "teknikfag-eksamensprojekt",
+    "storage_bucket": "teknikfag-eksamensprojekt.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:347556182902:android:397e2393ee0c95bc145857",
+        "android_client_info": {
+          "package_name": "com.example.myapplication"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC8gAM8JcEYPUXv9cP1JjVYV5drIqOBA1Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

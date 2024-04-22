@@ -28,7 +28,11 @@ import com.google.firebase.storage.ktx.storage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.io.IOException
 import java.util.*
 
@@ -186,38 +190,63 @@ class MainActivity : AppCompatActivity() {
         return url.replace("/", "%2F")
     }
 
-    private fun performOcrWithImageUrl(imageUrl: String) {
-        // Encode the URL
-        val encodedUrl = encodeUrl(imageUrl)
+    private suspend fun shortenUrl(longUrl: String, accessToken: String): String {
+        return withContext(Dispatchers.IO) {
+            val client = OkHttpClient()
+            val requestBody = JSONObject().put("long_url", longUrl).toString()
+            val request = Request.Builder()
+                .url("https://api-ssl.bitly.com/v4/shorten")
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Authorization", "Bearer $accessToken")
+                .post(requestBody.toRequestBody("application/json".toMediaType()))
+                .build()
 
-        // Construct the SERP API URL with the Firebase Storage image URL
-        val apiKey = "b42486ae7a4fbe57434cbaa737542c5f49ac2920b7bb97dd726a31ed6c9a0c0a"
-        val serpApiUrl = "https://serpapi.com/search.json?engine=google_lens&url=$encodedUrl&api_key=$apiKey"
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("Unexpected code $response")
 
-        // Make API call to SERP API using the constructed URL
-        val client = OkHttpClient()
-        val request = Request.Builder()
-            .url(serpApiUrl)
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                // Handle API call failure
-                e.printStackTrace()
-                showToast("Failed to make API call")
+                val responseBody = response.body?.string()
+                val jsonObject = JSONObject(responseBody!!)
+                jsonObject.getString("link")
             }
-
-            override fun onResponse(call: Call, response: Response) {
-                response.body?.let {
-                    val responseData = it.string()
-                    CoroutineScope(Dispatchers.Main).launch {
-                        // Update UI with the API response
-                        updateUiWithApiResponse(responseData)
-                    }
-                }
-            }
-        })
+        }
     }
+
+    private fun performOcrWithImageUrl(imageUrl: String) {
+        val accessToken = "0cdcdccf70dcbe52cb43c921fee3fad3d912c04b"
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val shortenedUrl = shortenUrl(imageUrl, accessToken)
+                // Construct the SERP API URL with the shortened URL
+                val apiKey = "b42486ae7a4fbe57434cbaa737542c5f49ac2920b7bb97dd726a31ed6c9a0c0a"
+                val serpApiUrl = "https://serpapi.com/search.json?engine=google_lens&url=$shortenedUrl&api_key=$apiKey"
+
+                // Make API call to SERP API using the constructed URL
+                val client = OkHttpClient()
+                val request = Request.Builder()
+                    .url(serpApiUrl)
+                    .build()
+
+                // Perform network operation on IO dispatcher
+                val response = withContext(Dispatchers.IO) {
+                    client.newCall(request).execute()
+                }
+
+                if (response.isSuccessful) {
+                    val responseData = response.body?.string()
+                    // Update UI with the API response
+                    responseData?.let {
+                        updateUiWithApiResponse(it)
+                    } ?: showToast("Empty response")
+                } else {
+                    showToast("Failed to make API call")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                showToast("Failed to shorten URL")
+            }
+        }
+    }
+
     private fun updateUiWithApiResponse(responseData: String) {
         // Update UI with the API response
         // For example, you can display it in responseTextView

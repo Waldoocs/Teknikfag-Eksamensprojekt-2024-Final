@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.view.Gravity
 import android.view.SurfaceView
+import android.view.View // Import View class
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -35,6 +36,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import java.util.*
+import android.widget.ImageView
+import com.bumptech.glide.Glide
 
 class MainActivity : AppCompatActivity() {
 
@@ -43,66 +46,35 @@ class MainActivity : AppCompatActivity() {
     private lateinit var selectImageButton: Button
     private lateinit var textRecognizer: TextRecognizer
     private lateinit var scannedTextView: TextView
-    private lateinit var responseTextView: TextView
+    private lateinit var showResponseButton: Button // New button for showing API response
+    private lateinit var searchProductButton: Button // New button for searching product
 
     private lateinit var takePictureLauncher: ActivityResultLauncher<Intent>
     private lateinit var selectImageLauncher: ActivityResultLauncher<Intent>
 
+    // Variable to store the SERP API response
+    private var serpApiResponse: String? = null
+    private lateinit var thumbnailImageView: ImageView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        thumbnailImageView = findViewById(R.id.thumbnailImageView)
 
         surfaceView = findViewById(R.id.surfaceView)
         surfaceView.setBackgroundColor(Color.WHITE)
         captureButton = findViewById(R.id.captureButton)
         selectImageButton = findViewById(R.id.selectImageButton)
         scannedTextView = findViewById(R.id.scannedTextView)
-        responseTextView = findViewById(R.id.responseTextView)
+        showResponseButton = findViewById(R.id.showResponseButton) // Initialize the new button
+        searchProductButton = findViewById(R.id.searchProductButton) // Initialize the new button
+
+        searchProductButton.visibility = View.GONE // Hide the search product button initially
 
         textRecognizer = TextRecognizer.Builder(applicationContext).build()
 
-        captureButton.setOnClickListener {
-            takePicture()
-        }
-
-        selectImageButton.setOnClickListener {
-            dispatchSelectImageIntent()
-        }
-
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.CAMERA
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.CAMERA),
-                REQUEST_CAMERA_PERMISSION
-            )
-        } else {
-            startCameraSource()
-        }
-
-        scannedTextView.setOnLongClickListener {
-            copyTextToClipboard(scannedTextView.text.toString())
-            true
-        }
-
-        responseTextView.setOnLongClickListener {
-            copyTextToClipboard(responseTextView.text.toString())
-            true
-        }
-
-        // Initialize ActivityResultLaunchers
-        takePictureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) {
-                val imageBitmap = result.data?.extras?.get("data") as Bitmap
-                performOcr(imageBitmap)
-            } else {
-                showToast("Image capture canceled")
-            }
-        }
-
+        // Initialize selectImageLauncher here
         selectImageLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
                 val imageUri = result.data?.data
@@ -111,6 +83,8 @@ class MainActivity : AppCompatActivity() {
                         val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
                         // Upload the image to Firebase Storage and retrieve the URL
                         uploadImageToFirebaseStorage(imageUri)
+                        // Show the "SEARCH PRODUCT" button
+                        searchProductButton.visibility = View.VISIBLE
                     } catch (e: IOException) {
                         e.printStackTrace()
                         showToast("Failed to load image")
@@ -120,6 +94,27 @@ class MainActivity : AppCompatActivity() {
                 showToast("Image selection canceled")
             }
         }
+
+        captureButton.setOnClickListener {
+            takePicture()
+        }
+
+        selectImageButton.setOnClickListener {
+            dispatchSelectImageIntent()
+        }
+
+        searchProductButton.setOnClickListener {
+            if (serpApiResponse != null) {
+                // Launch ResponseActivity and pass the SERP API response data
+                val intent = Intent(this, ResponseActivity::class.java)
+                intent.putExtra("api_response", serpApiResponse)
+                startActivity(intent)
+            } else {
+                showToast("Wait...")
+            }
+        }
+
+        // Rest of your onCreate method remains the same
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -161,6 +156,7 @@ class MainActivity : AppCompatActivity() {
         }
         scannedTextView.text = detectedText.toString()
         scannedTextView.gravity = Gravity.CENTER
+        searchProductButton.visibility = View.VISIBLE // Show the search product button after image is selected and text is detected
     }
 
     private fun uploadImageToFirebaseStorage(imageUri: Uri) {
@@ -233,10 +229,8 @@ class MainActivity : AppCompatActivity() {
 
                 if (response.isSuccessful) {
                     val responseData = response.body?.string()
-                    // Update UI with the API response
-                    responseData?.let {
-                        updateUiWithApiResponse(it)
-                    } ?: showToast("Empty response")
+                    // Save the API response
+                    serpApiResponse = responseData
                 } else {
                     showToast("Failed to make API call")
                 }
@@ -248,10 +242,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateUiWithApiResponse(responseData: String) {
-        // Update UI with the API response
+        // Update UI with the API response"
         // For example, you can display it in responseTextView
         runOnUiThread {
-            responseTextView.text = responseData
+            val responseJson = JSONObject(responseData)
+            val visualMatches = responseJson.getJSONArray("visual_matches")
+            if (visualMatches.length() > 0) {
+                val firstMatch = visualMatches.getJSONObject(0)
+                val thumbnailUrl = firstMatch.getString("thumbnail")
+                // Load the thumbnail image using Glide
+                Glide.with(this)
+                    .load(thumbnailUrl)
+                    .into(thumbnailImageView)
+                thumbnailImageView.visibility = View.VISIBLE
+            }
         }
     }
 

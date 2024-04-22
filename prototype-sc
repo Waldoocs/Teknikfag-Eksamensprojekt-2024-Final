@@ -1,0 +1,173 @@
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.image import Image
+from kivy.resources import resource_find
+from kivy.core.window import Window
+from kivy.metrics import dp
+from kivy.animation import Animation
+from kivy.uix.behaviors import ButtonBehavior
+
+
+# Dummy product data
+product_data = {
+    "123": {
+        "name": "Uludag Gazoz",
+        "description": "Gazoz Drink.",
+        "price": "6.- DKK",
+        "manufacturer": "Uludag LLC."
+    }
+}
+
+
+class ArrowButton(ButtonBehavior, Image):
+    pass
+
+
+class SearchPage(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
+
+        self.product_info_label = Label(text='', size_hint=(1, None), height=dp(100))
+
+        barcode_input = TextInput(hint_text='Enter EAN barcode number', multiline=False, size_hint=(1, None),
+                                  height=dp(30))
+        search_button = Button(text='Search', size_hint=(1, None), height=dp(50))
+        search_button.bind(on_press=lambda x: self.search_product(barcode_input.text))
+
+        self.layout.add_widget(self.product_info_label)
+        self.layout.add_widget(barcode_input)
+        self.layout.add_widget(search_button)
+
+        self.add_widget(self.layout)
+
+    def search_product(self, barcode):
+        product_info = product_data.get(barcode, None)
+        if product_info:
+            app.root.current = 'details'
+            app.details_page.update_details(product_info)
+        else:
+            self.product_info_label.text = "Product not found."
+
+
+class DetailsPage(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
+
+        # Find the path to the image
+        image_path = resource_find('uludag.png')
+
+        # Check if image_path is found
+        if image_path:
+            self.product_image = Image(source=image_path, size_hint=(1, None), height=dp(200))
+        else:
+            self.product_image = Label(text="Image not found", size_hint=(1, None), height=dp(200))
+
+        self.details_label = Label(text='', size_hint=(1, None), height=dp(100))
+
+        back_button = Button(text='Back', size_hint=(1, None), height=dp(50))
+        back_button.bind(on_press=self.go_to_search_page)
+
+        reviews_button = Button(text='Reviews', size_hint=(1, None), height=dp(50))
+        reviews_button.bind(on_press=self.show_reviews)
+
+        videos_button = Button(text='Videos', size_hint=(1, None), height=dp(50))
+        videos_button.bind(on_press=self.show_videos)
+
+        price_button = Button(text='Price', size_hint=(1, None), height=dp(50))
+        price_button.bind(on_press=self.show_price)
+
+        information_button = Button(text='Information', size_hint=(1, None), height=dp(50))
+        information_button.bind(on_press=self.show_information)
+
+        # Arrows for reviews
+        self.left_arrow = ArrowButton(source='left_arrow.png', size_hint=(None, None), size=(dp(50), dp(50)))
+        self.right_arrow = ArrowButton(source='right_arrow.png', size_hint=(None, None), size=(dp(50), dp(50)))
+        self.left_arrow.bind(on_press=self.show_previous_review)
+        self.right_arrow.bind(on_press=self.show_next_review)
+
+        self.layout.add_widget(self.product_image)
+        self.layout.add_widget(self.details_label)
+        self.layout.add_widget(reviews_button)
+        self.layout.add_widget(videos_button)
+        self.layout.add_widget(price_button)
+        self.layout.add_widget(information_button)
+        self.layout.add_widget(back_button)
+
+        self.layout.add_widget(self.left_arrow)
+        self.layout.add_widget(self.right_arrow)
+
+        self.add_widget(self.layout)
+
+        # Reviews data
+        self.reviews = [
+            "Necaati: 5/5 Elsker min gazoz",
+            "Jørgen: De har scoret hjem med denne drink 5/5",
+            "Anders: 1/5 Faxe er bare bedre!"
+        ]
+        self.current_review_index = 0
+
+    def go_to_search_page(self, instance):
+        app.root.current = 'search'
+
+    def update_details(self, product_info):
+        anim = Animation(opacity=0, duration=0.5) + Animation(opacity=1, duration=0.5)
+        anim.start(self.details_label)
+        self.details_label.text = (
+            f"Name: {product_info['name']}\n"
+            f"Description: {product_info['description']}\n"
+            f"Price: {product_info['price']}\n"
+            f"Manufacturer: {product_info['manufacturer']}"
+        )
+
+    def show_reviews(self, instance):
+        anim = Animation(opacity=0, duration=0.5) + Animation(opacity=1, duration=0.5)
+        anim.start(self.details_label)
+        self.details_label.text = self.reviews[self.current_review_index]
+
+    def show_videos(self, instance):
+        anim = Animation(opacity=0, duration=0.5) + Animation(opacity=1, duration=0.5)
+        anim.start(self.details_label)
+        self.details_label.text = "Videos:\nElon Musk spiser hummus med gazoz\nIzzet gazoz vlog\nGazoz Review"
+
+    def show_price(self, instance):
+        anim = Animation(opacity=0, duration=0.5) + Animation(opacity=1, duration=0.5)
+        anim.start(self.details_label)
+        self.details_label.text = "Price:\nPrisen har ændret 31KR siden sidste kvartal"
+
+    def show_information(self, instance):
+        anim = Animation(opacity=0, duration=0.5) + Animation(opacity=1, duration=0.5)
+        anim.start(self.details_label)
+        self.details_label.text = "Information:\nEkstra information her"
+
+    def show_previous_review(self, instance):
+        if self.current_review_index > 0:
+            self.current_review_index -= 1
+            self.show_reviews(None)
+
+    def show_next_review(self, instance):
+        if self.current_review_index < len(self.reviews) - 1:
+            self.current_review_index += 1
+            self.show_reviews(None)
+
+
+class BarcodeApp(App):
+    def build(self):
+        self.search_page = SearchPage(name='search')
+        self.details_page = DetailsPage(name='details')
+
+        self.screen_manager = ScreenManager()
+        self.screen_manager.add_widget(self.search_page)
+        self.screen_manager.add_widget(self.details_page)
+
+        return self.screen_manager
+
+
+if __name__ == '__main__':
+    app = BarcodeApp()
+    app.run()
